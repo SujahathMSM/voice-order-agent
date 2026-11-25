@@ -104,6 +104,20 @@ TOOLS_SPEC = [
     {
         "type": "function",
         "function": {
+            "name": "set_pickup_time",
+            "description": "Set when the caller will pick up the order. Normalize "
+                           "what they said ('six thirty', 'around 7 PM') into 12h or "
+                           "24h clock time, e.g. '6:30 PM' or '18:30'.",
+            "parameters": {
+                "type": "object",
+                "properties": {"time": {"type": "string"}},
+                "required": ["time"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "confirm_order",
             "description": "Lock the order after reading it back and the caller agreed. "
                            "No changes possible after this.",
@@ -126,6 +140,7 @@ class ToolBox:
             "remove_item": self._remove_item,
             "filter_menu": self._filter_menu,
             "read_order": self._read_order,
+            "set_pickup_time": self._set_pickup_time,
             "confirm_order": self._confirm_order,
         }
 
@@ -201,6 +216,34 @@ class ToolBox:
     def _read_order(self, args: dict) -> str:
         """Ground truth for read-backs. Kills 'agent misreported the order' bugs."""
         return self.order.summary().replace("\n", " | ")
+
+    @staticmethod
+    def _normalize_time(raw: str) -> str | None:
+        """'6:30 pm'/'18:30'/'7 pm' -> 'HH:MM' 24h. None if unparseable."""
+        import re
+        match = re.fullmatch(
+            r"\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*",
+            raw.strip().lower().replace(".", ""))
+        if not match:
+            return None
+        hour = int(match.group(1))
+        minute = int(match.group(2) or 0)
+        meridiem = match.group(3)
+        if meridiem == "pm" and hour < 12:
+            hour += 12
+        if meridiem == "am" and hour == 12:
+            hour = 0
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            return None
+        return f"{hour:02d}:{minute:02d}"
+
+    def _set_pickup_time(self, args: dict) -> str:
+        normalized = self._normalize_time(args["time"])
+        if normalized is None:
+            return (f"ERROR: could not read '{args['time']}' as a time. "
+                    f"Ask the caller again, e.g. 'six thirty PM'.")
+        self.order.pickup_time = normalized
+        return f"Pickup time set to {normalized}."
 
     def _confirm_order(self, args: dict) -> str:
         return "CONFIRMED:\n" + self.order.confirm_order()

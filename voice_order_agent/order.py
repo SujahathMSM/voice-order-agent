@@ -22,6 +22,7 @@ class Order:
     """One customer's order. The LLM will drive this ONLY via tool calls."""
     lines: list[OrderLine] = field(default_factory=list)
     status: str = "open"            # "open" or "confirmed"
+    pickup_time: Optional[str] = None   # "HH:MM" 24h, set via set_pickup_time
     _next_id: int = 1
 
     def _check_editable(self) -> None:
@@ -74,18 +75,25 @@ class Order:
 
     def summary(self) -> str:
         """The read-back text. Step 7 will speak this on the phone."""
-        if not self.lines:
+        if not self.lines and not self.pickup_time:
             return "The order is currently empty."
+        if not self.lines:
+            return f"No items yet. Pickup at {self.pickup_time}."
         rows = [f"{line.quantity} x {line.name}"
                 + (f" ({', '.join(line.options)})" if line.options else "")
                 + f" - {line.line_total} LKR"
                 for line in self.lines]
-        return "\n".join(rows) + f"\nTotal: {self.total} LKR"
+        text = "\n".join(rows) + f"\nTotal: {self.total} LKR"
+        if self.pickup_time:
+            text += f"\nPickup at {self.pickup_time}"
+        return text
 
     def confirm_order(self) -> str:
-        """Lock the order. Only allowed when it is not empty."""
+        """Lock the order. Only allowed when it is not empty AND has a pickup time."""
         self._check_editable()
         if not self.lines:
             raise ValueError("Cannot confirm an empty order")
+        if not self.pickup_time:
+            raise ValueError("No pickup time set - call set_pickup_time first")
         self.status = "confirmed"
         return self.summary()

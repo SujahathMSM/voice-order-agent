@@ -84,12 +84,19 @@ def make_tools(box: ToolBox):
         return box.execute("remove_item", {"line_id": line_id})
 
     @function_tool
+    async def set_pickup_time(context: RunContext, time: str) -> str:
+        """Set when the caller will pick up. Normalize what they said into
+        clock time, e.g. '6:30 PM' or '18:30'. Call before confirm_order."""
+        return box.execute("set_pickup_time", {"time": time})
+
+    @function_tool
     async def confirm_order(context: RunContext) -> str:
-        """Lock the order after reading it back and the caller agreed."""
+        """Lock the order. Requires items AND a pickup time. Only call after
+        reading the order back and the caller agreed."""
         return box.execute("confirm_order", {})
 
     return [search_menu, filter_menu, add_item, update_item, remove_item,
-            read_order, confirm_order]
+            read_order, set_pickup_time, confirm_order]
 
 
 def warm_audio_resamplers() -> None:

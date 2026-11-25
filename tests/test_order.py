@@ -38,6 +38,7 @@ def test_remove_second_item():
 
 def test_confirm_locks_everything():
     order = make_order()
+    order.pickup_time = "18:30"          # confirm now requires a pickup time
     order.confirm_order()
     for action in (lambda: order.add_item("roll-fish", "Fish Rolls", 260),
                    lambda: order.update_item(1, quantity=9),
@@ -48,6 +49,22 @@ def test_confirm_locks_everything():
             assert False, "edit after confirm should have failed"
         except RuntimeError:
             pass
+
+
+def test_confirm_requires_pickup_time():
+    """A phone order locked without a pickup time is half an order."""
+    order = make_order()
+    try:
+        order.confirm_order()
+        assert False, "confirm without pickup time should have failed"
+    except ValueError as error:
+        assert "pickup" in str(error)
+
+
+def test_summary_includes_pickup_time():
+    order = make_order()
+    order.pickup_time = "18:30"
+    assert "Pickup at 18:30" in order.summary()
 
 
 def test_cannot_confirm_empty():
