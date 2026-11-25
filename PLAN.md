@@ -1,0 +1,39 @@
+# Build plan
+
+Text first, voice later: steps 1–4 work by typing, so the ordering logic is debugged
+before audio is added.
+
+- [x] 0. Accent test — script that sends my 10 recorded WAV files to Voxtral and local
+        faster-whisper (small), prints both transcripts and the word error rate against my reference text
+        RESULT: Voxtral 13.25% vs whisper 34.37%. Findings: (a) Voxtral confirmed,
+        (b) fuzzy menu matching is load-bearing ("kottu"), (c) eval needs number
+        normalization (step 12), (d) references must be re-recorded only for mumbles.
+- [x] 1. Project setup — uv project, folder structure, `.env` for keys, config loading
+- [ ] 2. Menu + RAG — `menu.json` (~30 items), embed with Mistral embeddings, store locally,
+        `search_menu()` function with a quick test
+- [ ] 3. Order state + tools — Order model, `add_item`, `update_item`, `remove_item`,
+        `confirm_order`, unit tests (no LLM yet)
+- [ ] 4. Text agent — Mistral Small with tool calling in a terminal chat loop; place a full order by typing
+- [ ] 5. Voice pipeline — LiveKit Agents with Voxtral STT + TTS, plug in the step 4 agent, test in browser
+- [ ] 6. Barge-in — stop speaking when the caller talks; keep only the spoken part of the reply in context
+- [ ] 7. Read-back — confirm items, quantities and pickup time; also when STT confidence is low
+- [ ] 8. Frustration-aware recovery — track corrections, repeated interruptions, "what?"/"repeat";
+        switch to slow step-by-step mode
+- [ ] 9. Model router — Mistral Small for normal turns, Meta Muse for hard ones, via the LLM proxy
+- [ ] 10. Persistence + kitchen screen — save confirmed orders (SQLite), simple live web page
+- [ ] 11. Latency logging — per turn: turn detection, STT, LLM first token, TTS first audio
+- [ ] 12. Evaluation — ~20 scripted test calls, measure order accuracy (numbers must be normalized)
+- [ ] 13. Comparisons — Mistral's ready-made voice agent and a fully local pipeline on the same calls
+        ADD: also test Meta Muse Voice Transcribe (real-time STT with keyword biasing —
+        does it fix "kottu"? compare WER + latency vs Voxtral on the same 10 recordings)
+- [ ] 14. Deploy + README — free cloud VM, latency table, results, architecture diagram
+
+## Project summary
+
+Voice ordering agent for a made-up restaurant. Customer talks in the browser; agent
+answers menu questions (RAG), builds the order with tool calls, handles interruptions,
+reads the order back, recovers when the caller gets frustrated, saves confirmed orders
+for a kitchen screen.
+
+Stack: LiveKit Agents + WebRTC, Mistral Voxtral (STT + TTS), Mistral Small + Meta Muse
+via LLM proxy, Mistral embeddings + local vector store. English only in v1.
