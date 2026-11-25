@@ -16,6 +16,7 @@ from livekit.plugins import mistralai
 from .agent import SYSTEM_PROMPT
 from .config import load_settings
 from .menu_search import MenuSearch
+from .store import OrderStore
 from .order import Order
 from .tools import MENU, ToolBox
 
@@ -133,7 +134,8 @@ async def entrypoint(ctx: JobContext) -> None:
     warm_audio_resamplers()   # run before ANY session audio can start
     settings = load_settings()
     order = Order()                         # one fresh order per caller
-    box = ToolBox(order, MenuSearch(settings))
+    store = OrderStore()                    # shared: persists orders + metrics
+    box = ToolBox(order, MenuSearch(settings), store=store)
 
     session = AgentSession(
         stt=mistralai.STT(
@@ -148,6 +150,45 @@ async def entrypoint(ctx: JobContext) -> None:
         instructions=SYSTEM_PROMPT,
         tools=make_tools(box),
     )
+
+    # -- Step 11: latency logging -------------------------------------------
+    # Every metrics event LiveKit emits goes to SQLite. Off the audio loop
+    # (thread) and failure-isolated: a metrics problem must never hurt a call.
+    from livekit.agents.metrics import LLMMetrics, STTMetrics, TTSMetrics, EOUMetrics
+    from datetime import datetime
+
+    @session.on("metrics_collected")
+    def _record(ev) -> None:
+        try:
+            m = ev.metrics
+            now = datetime.now().isoformat(timespec="seconds")
+            sess = ctx.job.id
+            if isinstance(m, LLMMetrics):
+                loop = asyncio.get_running_loop()
+                loop.run_in_executor(None, lambda: store.record_metric(
+                    "llm", now, sess, duration=m.duration, ttft=m.ttft,
+                    cancelled=int(m.cancelled), prompt_tokens=m.prompt_tokens,
+                    completion_tokens=m.completion_tokens))
+            elif isinstance(m, TTSMetrics):
+                loop = asyncio.get_running_loop()
+                loop.run_in_executor(None, lambda: store.record_metric(
+                    "tts", now, sess, duration=m.duration, ttfb=m.ttfb,
+                    audio_duration=m.audio_duration,
+                    cancelled=int(m.cancelled)))
+            elif isinstance(m, STTMetrics):
+                loop = asyncio.get_running_loop()
+                loop.run_in_executor(None, lambda: store.record_metric(
+                    "stt", now, sess, duration=m.duration,
+                    audio_duration=m.audio_duration))
+            elif isinstance(m, EOUMetrics):
+                loop = asyncio.get_running_loop()
+                loop.run_in_executor(None, lambda: store.record_metric(
+                    "eou", now, sess,
+                    end_of_utterance_delay=m.end_of_utterance_delay,
+                    transcription_delay=m.transcription_delay))
+        except Exception:   # noqa: BLE001 - metrics must never break a call
+            pass
+
     await session.start(agent=agent, room=ctx.room)
     await session.generate_reply(
         instructions="Greet the caller warmly, one short sentence: welcome to "

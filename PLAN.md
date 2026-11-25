@@ -65,8 +65,30 @@ before audio is added.
         3370 LKR (no read_order call). Rule 5 made absolute: LLM never does order
         math; every read-back (not just pre-confirm) comes from read_order. 25/25.
 - [ ] 9. Model router — Mistral Small for normal turns, Meta Muse for hard ones, via the LLM proxy
-- [ ] 10. Persistence + kitchen screen — save confirmed orders (SQLite), simple live web page
-- [ ] 11. Latency logging — per turn: turn detection, STT, LLM first token, TTS first audio
+        DEFERRED (research step): "Muse" on the Meta Model API is Muse Voice Transcribe
+        (streaming STT with keyword biasing), NOT an LLM with tool calling - moved to
+        step 13's STT comparison (vs Voxtral, same 10 accent recordings). Router has
+        no second model and no data yet: build after step 11 latency logging, so
+        routing decisions come from measurements, not vibes.
+- [x] 10. Persistence + kitchen screen — save confirmed orders (SQLite), simple live web page
+        DONE: store.py (orders + order_items relational, refuses unconfirmed,
+        double-save blocked, item_sales_count query); persistence rides the
+        confirm path (one truth, tool result prefixed "ORDER #N" so the agent
+        can speak the number); kitchen.py stdlib page, polls /orders.json every
+        3s. Verified live: order appeared on the kitchen screen with correct
+        items/total/pickup, confirm timestamp to the second. 30/30 tests.
+        Note: prompt rule 14 added - say the order number (first run skipped it).
+- [x] 11. Latency logging — per turn: turn detection, STT, LLM first token, TTS first audio
+        DONE: turn_metrics table in orders.db + metrics_collected hook (thread-write,
+        failure-isolated; API verified against installed livekit 1.8.13). 32/32
+        tests. FIRST REAL NUMBERS (12 turns): EOU 2296ms avg, STT final 2075ms,
+        LLM ttft 1157ms, TTS ttfb 1046ms -> caller-felt silence ~4.5-6s/turn, and
+        ~70% of it is STT finals being paid twice (slow finals -> low EOT
+        confidence -> conservative 2.5s endpointing waits). LLM+TTS fine.
+        => step 13 Muse Voice Transcribe vs Voxtral is now THE data-backed target.
+        Tech debt: metrics_collected deprecated (-> ChatMessage.metrics on upgrade).
+        Polish bug noted: duplicate dish lines not merged (1+10 hoppers read as
+        two lines, total still correct).
 - [ ] 12. Evaluation — ~20 scripted test calls, measure order accuracy (numbers must be normalized)
 - [ ] 13. Comparisons — Mistral's ready-made voice agent and a fully local pipeline on the same calls
         ADD: also test Meta Muse Voice Transcribe (real-time STT with keyword biasing —

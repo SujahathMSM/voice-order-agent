@@ -67,6 +67,27 @@ def test_summary_includes_pickup_time():
     assert "Pickup at 18:30" in order.summary()
 
 
+def test_same_item_merges_into_one_line():
+    """'1 hopper then 10 more hoppers' reads as ONE line: 11 x Egg Hoppers.
+    A kitchen ticket with duplicate item lines is a bug, not a curiosity."""
+    order = Order()
+    order.add_item("hopper-egg", "Egg Hoppers", 250, quantity=1)
+    line = order.add_item("hopper-egg", "Egg Hoppers", 250, quantity=10)
+    assert len(order.lines) == 1
+    assert line.quantity == 11 and line.line_id == 1
+    assert order.total == 11 * 250
+    assert "11 x Egg Hoppers" in order.summary()
+
+
+def test_same_item_different_options_stay_separate():
+    """Plain kottu and extra-hot kottu are different plates - no merge."""
+    order = Order()
+    order.add_item("kottu-chicken", "Chicken Kottu", 1450, options=[])
+    order.add_item("kottu-chicken", "Chicken Kottu", 1450,
+                   options=["extra hot"])
+    assert len(order.lines) == 2
+
+
 def test_cannot_confirm_empty():
     order = Order()
     try:

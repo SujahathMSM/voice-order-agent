@@ -6,6 +6,7 @@ from mistralai.client import Mistral
 from .config import Settings, load_settings
 from .menu_search import MenuSearch
 from .order import Order
+from .store import OrderStore
 from .tools import TOOLS_SPEC, ToolBox
 
 MAX_TOOL_ROUNDS = 4   # escape valve: never loop tools forever
@@ -64,6 +65,9 @@ RULES (follow exactly):
     ONE item per sentence; confirm each item before continuing ("Two chicken
     kottu. Okay?"); ONE question at a time, never stacked; repeat the total
     slowly at the end. Never switch back to fast mode mid-call.
+14. After confirm_order succeeds, tell the caller their ORDER NUMBER: the confirm
+    result starts with "ORDER #N" - say "your order number is N". They need it
+    at the counter.
 """
 
 
@@ -73,7 +77,7 @@ class OrderAgent:
     def __init__(self, settings: Settings) -> None:
         self.client = Mistral(api_key=settings.mistral_api_key)
         self.order = Order()
-        self.toolbox = ToolBox(self.order, MenuSearch(settings))
+        self.toolbox = ToolBox(self.order, MenuSearch(settings), store=OrderStore())
         self.messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     def chat(self, user_text: str) -> str:
