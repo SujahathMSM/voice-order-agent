@@ -24,7 +24,13 @@ before audio is added.
         onions" = wrong-tool problem -> added exact filter_menu tool; similarity tools must
         never be used for whole-catalog questions; (b) prompt rules from step 2 findings
         worked as designed (ask-don't-guess, read-back-before-confirm, drinks upsell).
-- [ ] 5. Voice pipeline — LiveKit Agents with Voxtral STT + TTS, plug in the step 4 agent, test in browser
+- [x] 5. Voice pipeline — LiveKit Agents with Voxtral STT + TTS, plug in the step 4 agent, test in browser
+        DONE: full spoken order confirmed end-to-end via LiveKit cloud dev + Test in
+        Console (4 kottu + coke, onion filter, update, read-back, confirm + lock).
+        Windows crash = livekit rust-sdks#1614 soxr race -> resampler warm-up fix.
+        Kottu mangled on 1st try -> agent ASKED (works as designed); bias fixed it on
+        repeat. Follow-ups: validate LLM option args vs menu, filter_menu sloppy
+        params, use_realtime=True latency retest.
 - [ ] 6. Barge-in — stop speaking when the caller talks; keep only the spoken part of the reply in context
 - [ ] 7. Read-back — confirm items, quantities and pickup time; also when STT confidence is low
 - [ ] 8. Frustration-aware recovery — track corrections, repeated interruptions, "what?"/"repeat";

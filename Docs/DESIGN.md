@@ -253,6 +253,57 @@ removal, read-back then confirm, drinks upsell post-confirmation.
 
 
 
+## 5b. Voice pipeline — LiveKit + Voxtral (Step 5, in progress)
+
+**Files:** `voice_order_agent/voice_agent.py`
+
+**Architecture swap:** LiveKit's `AgentSession` replaces our hand-rolled step-4 loop
+(turn detection, audio plumbing, interruptions come with it). Our `ToolBox`, `Order`,
+menu RAG and system prompt survive unchanged; tools ported via `@function_tool`
+wrappers around `ToolBox.execute` (thin: same safety code, same 14 tests).
+
+**Key wins discovered in research:**
+
+- Official `livekit-plugins-mistralai`: Voxtral STT (`voxtral-mini-transcribe-realtime-3`,
+  streaming, server-side endpointing) + Voxtral TTS (`voxtral-mini-tts-3`) + Mistral LLM.
+- **STT `context_bias`**: ~60 menu names + aliases fed to the recognizer — the kottu
+  problem fixed at the source. Vocabulary repair now has TWO layers with different
+  coverage: STT bias (fixes before text exists, catches phonetic mangles) and fuzzy
+  search (repairs what slips through, catches typos/aliases).
+- `use_realtime` TTS streams speech as the LLM generates (latency win) — see quirk below.
+
+**Console-mode findings (smoke test):**
+
+- Session verified: real mic speech → correct STT → tool calls → audible replies.
+- Console/deprecated-mode quirks accepted, not debugged: typed turns reply without
+  audio; STT websocket dies after 30s of typed-only silence; `lk cloud env` doesn't
+  exist. Speaking is the product.
+
+**Browser session via LiveKit Cloud ("Test in Console", Step 5 result — DONE):**
+
+- Full spoken order placed AND confirmed end-to-end with the founder's accent: add,
+  parallel double add, update "change that to four", onion-free filter (all 6 correct),
+  read-back, confirm, lock. `agent_name="order-taker"` registered on the cloud.
+- **THE KOTTU TEST, live result:** 1st attempt STT heard "three chicken coke in one
+  cup"; the agent did not guess — search returned ambiguity, agent asked "Did you mean
+  a soft drink with Coke?". 2nd attempt STT (with `context_bias`) heard "chicken kottu"
+  correctly. The exact failure predicted in step 2, handled exactly as designed:
+  failure degrades into a QUESTION, and the bias layer fixes the repeat.
+- **Windows native crash root-caused** (no Python traceback -> native code; crash at
+  session audio start -> race): livekit/rust-sdks#1614, soxr FFT-cache init race in
+  `livekit_ffi.dll`. Fix: `warm_audio_resamplers()` runs resamplers once,
+  single-threaded, in `entrypoint` before session audio (issue's verified workaround,
+  100/100 clean). Original C++ assertion popup (FFT_LEN == -1, Abort/Retry/Ignore)
+  blocks then kills the process — why the dev terminal "closed suddenly".
+- **Latency notes:** `use_realtime=False` (set during console debugging) shows "flush
+  audio emitter due to slow audio generation" on most turns → flipped back to
+  `use_realtime=True` for streaming TTS; re-test. Lazy-first-import stalls
+  (~1-6s once per process for mistralai) documented; prewarm hooks exist if needed.
+- Session recording is enabled (`enable_recording: true`) by the console — step 12
+  evaluation gets transcripts + audio from LiveKit Cloud for free.
+
+
+
 ## 6. Track record of lessons that generalise
 
 1. Verify library APIs against the installed version, never from memory (mistralai import
@@ -266,6 +317,9 @@ removal, read-back then confirm, drinks upsell post-confirmation.
    ("everything has onions" = sample tool answering a census question).
 8. An agent turn is a LOOP of API calls (1–3+ LLM calls + embedding calls per turn), not
    one call — the escape valve and history growth both follow from this.
+9. Crash triage heuristics: no Python traceback = look at native code; intermittent
+   crash at session start = suspect a race; a vendor bug report with a verified
+   workaround beats a week of blind debugging (rust-sdks#1614).
 
 ---
 
