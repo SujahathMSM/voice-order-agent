@@ -9,6 +9,22 @@ from .order import Order
 from .tools import TOOLS_SPEC, ToolBox
 
 MAX_TOOL_ROUNDS = 4   # escape valve: never loop tools forever
+KEEP_MESSAGES = 24    # after pruning: system prompt + last ~24 messages
+
+
+def prune_messages(messages: list[dict], keep: int = KEEP_MESSAGES) -> list[dict]:
+    """Trim old turns. State is safe to drop because the ORDER lives in the
+    Order object, not in chat. The only hazard is cutting an assistant
+    tool_call apart from its tool results, so we only cut at a USER message
+    boundary; if no boundary exists in range, we don't cut at all."""
+    if len(messages) <= keep:
+        return messages
+    start = max(1, len(messages) - keep)     # never touch the system prompt
+    while start < len(messages) and messages[start]["role"] != "user":
+        start += 1
+    if start >= len(messages):
+        return messages                      # no safe boundary: keep everything
+    return [messages[0]] + messages[start:]
 
 SYSTEM_PROMPT = """You are the counter assistant at Spice Route Kitchen, a Sri Lankan
 fusion restaurant. You take orders by phone. Be warm, brief and natural - this will be
@@ -54,6 +70,7 @@ class OrderAgent:
 
     def chat(self, user_text: str) -> str:
         """One turn: append user text, loop tools if needed, return the agent's reply."""
+        self.messages = prune_messages(self.messages)
         self.messages.append({"role": "user", "content": user_text})
 
         for _ in range(MAX_TOOL_ROUNDS):

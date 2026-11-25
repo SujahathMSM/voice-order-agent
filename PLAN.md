@@ -48,6 +48,12 @@ before audio is added.
         back not guessed ('9.70' -> "Did you mean 7 PM?"). 20/20 tests. Live findings
         fixed in prompt: PM must be asked not assumed; call must not end unconfirmed;
         say LKR not rupees.
+- [x] 7a. Context and history — added during the step 8 build: prune old turns safely
+        DONE: prune_messages() pure function — system prompt always kept, cut ONLY
+        at user-message boundaries so tool_call/tool pairs stay intact,
+        no-safe-boundary = no cut (oversized context beats corrupt context).
+        24/24 tests. Voice side deliberately not pruned (calls are ~9 turns;
+        LiveKit update_chat_ctx exists if ever needed).
 - [ ] 8. Frustration-aware recovery — track corrections, repeated interruptions, "what?"/"repeat";
         switch to slow step-by-step mode
 - [ ] 9. Model router — Mistral Small for normal turns, Meta Muse for hard ones, via the LLM proxy
