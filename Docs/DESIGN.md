@@ -304,7 +304,39 @@ wrappers around `ToolBox.execute` (thin: same safety code, same 14 tests).
 
 
 
-## 6. Track record of lessons that generalise
+## 5c. Barge-in / interruptions (Step 6, DONE)
+
+**Verified live, on evidence:** interruption mid-reply detected (probability ~0.71,
+agent dropped the rest of the sentence and answered the cut-in); a cough correctly
+produced NO interruption; agent speech self-interruption risk handled by the AEC
+warmup window (interruptions disabled 3s while greeting starts).
+**Honest scope note:** AgentSession implements barge-in by default — our work was
+verification and reading logs, not building it. Frameworks give the 90%; the last
+10% (mic, room, thresholds) is empirical tuning per deployment.
+
+**Two real bugs found in the same session (fixed, tested):**
+
+1. **The phantom add.** LLM said "Two Fish Rolls added" with NO add_item call —
+   a fabrication from conversation memory. The new `read_order` tool (order.summary()
+   piped to the LLM) exposed the truth ("Your order is empty"), the caller pushed
+   back, and the conversation repaired itself — failure degraded into a correction
+   instead of a wrong confirmed order. Also pinned with prompt rule 9: "if you want
+   an item on the order you MUST call add_item in this same reply; never say
+   'added' for what a tool has not returned". Lesson: an LLM with order-*changing*
+   tools only will narrate the order from memory; give it a tool to *consult* the
+   truth, then make the read-back flow go through it.
+2. **Event-loop blocking.** Our sync embeddings API call ran on the async audio
+   loop: ~900ms frozen (audio, interruption checks) per search — LiveKit warned
+   with the exact fix. `search_menu` wrapper now uses `asyncio.to_thread`. Lesson:
+   in a voice agent, blocking the event loop = the caller hears dead air; network
+   I/O inside tools goes to a thread, always.
+
+**Also:** options are now validated against `menu.json` in `_add_item`
+(the menu owns the legal option list, not the LLM) — and twice I mis-called
+"hallucination" what was actually legal data (kottu's "plain" option, seafood
+rice's "no onion"): lesson #10 below.
+
+
 
 1. Verify library APIs against the installed version, never from memory (mistralai import
    restructure).
@@ -320,6 +352,10 @@ wrappers around `ToolBox.execute` (thin: same safety code, same 14 tests).
 9. Crash triage heuristics: no Python traceback = look at native code; intermittent
    crash at session start = suspect a race; a vendor bug report with a verified
    workaround beats a week of blind debugging (rust-sdks#1614).
+10. Before diagnosing "the LLM hallucinated", check the data: two suspected
+    hallucinations this project ("plain" option, "no onion" question) were both
+    legal menu fields. Wrong-tool and invented-fact bugs are real (see #7's onion
+    census and the phantom add), but verify against ground truth first, always.
 
 ---
 

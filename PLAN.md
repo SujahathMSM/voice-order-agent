@@ -31,7 +31,16 @@ before audio is added.
         Kottu mangled on 1st try -> agent ASKED (works as designed); bias fixed it on
         repeat. Follow-ups: validate LLM option args vs menu, filter_menu sloppy
         params, use_realtime=True latency retest.
-- [ ] 6. Barge-in — stop speaking when the caller talks; keep only the spoken part of the reply in context
+- [x] 6. Barge-in — stop speaking when the caller talks; keep only the spoken part of the reply in context
+        DONE: verified live. interruption detected mid-reply (agent cut itself off,
+        dropped the rest); coughs correctly IGNORED (no false interruption); AEC
+        warmup window confirmed. Fixes shipped with it: read_order tool (agent
+        claimed "added" with no add call -> read_order exposed the empty truth,
+        conversation self-repaired); sync embedding calls blocked the audio loop
+        ~1s per search -> moved to asyncio.to_thread; "added" hallucination pinned
+        with prompt rules 8-9; options validated against menu.json in _add_item.
+        16/16 tests. Note: interruption handling came from AgentSession defaults -
+        the work was VERIFICATION + tuning, not building.
 - [ ] 7. Read-back — confirm items, quantities and pickup time; also when STT confidence is low
 - [ ] 8. Frustration-aware recovery — track corrections, repeated interruptions, "what?"/"repeat";
         switch to slow step-by-step mode
