@@ -118,6 +118,21 @@ TOOLS_SPEC = [
     {
         "type": "function",
         "function": {
+            "name": "note_frustration",
+            "description": "Call ONCE when you detect the caller struggling: they say "
+                           "'what?', 'sorry?', 'repeat', ask you to slow down, or "
+                           "correct you twice in a row. Give a short reason. After "
+                           "calling this, switch to slow step-by-step mode.",
+            "parameters": {
+                "type": "object",
+                "properties": {"reason": {"type": "string"}},
+                "required": ["reason"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "confirm_order",
             "description": "Lock the order after reading it back and the caller agreed. "
                            "No changes possible after this.",
@@ -133,6 +148,7 @@ class ToolBox:
     def __init__(self, order: Order, searcher: MenuSearch) -> None:
         self.order = order
         self.searcher = searcher
+        self.frustration_events: list[str] = []   # evidence for evaluation (step 12)
         self.handlers: dict[str, Callable[[dict], str]] = {
             "search_menu": self._search_menu,
             "add_item": self._add_item,
@@ -141,6 +157,7 @@ class ToolBox:
             "filter_menu": self._filter_menu,
             "read_order": self._read_order,
             "set_pickup_time": self._set_pickup_time,
+            "note_frustration": self._note_frustration,
             "confirm_order": self._confirm_order,
         }
 
@@ -244,6 +261,13 @@ class ToolBox:
                     f"Ask the caller again, e.g. 'six thirty PM'.")
         self.order.pickup_time = normalized
         return f"Pickup time set to {normalized}."
+
+    def _note_frustration(self, args: dict) -> str:
+        """Evidence only: counts struggles so evaluation can measure them.
+        Never changes order state; the MODE change is the LLM's job (prompt rule 13)."""
+        self.frustration_events.append(args.get("reason", "unspecified"))
+        return (f"Acknowledged (frustration event {len(self.frustration_events)}). "
+                f"Continue in slow mode: short sentences, one item and one question at a time.")
 
     def _confirm_order(self, args: dict) -> str:
         return "CONFIRMED:\n" + self.order.confirm_order()

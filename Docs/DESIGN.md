@@ -382,6 +382,27 @@ No cut is ever taken mid-exchange; tests pin all three properties.
 LiveKit exposes `session.update_chat_ctx` if evaluation ever shows degradation.
 No optimization without a measurement.
 
+## 5f. Frustration-aware recovery (Step 8, DONE)
+
+**Design split:** detection + adaptation = PROMPT (behavior), evidence = TOOL
+(counter in ToolBox, per-call; logs show `note_frustration` with reason; step 12
+eval can count struggles per call). Rule 13: triggers ("what?", "sorry?", "repeat",
+slow-down request, two corrections) -> slow mode for the REST of the call: short
+sentences, one item per sentence, one question at a time, per-item confirm.
+
+**Live verdict:** PASS. First trigger detected and logged; slow mode engaged
+("Sorry. One chicken fried rice. Okay?") and HELD through confirm; correction
+recovery ("make the rice too" misheard -> caller corrected -> quantity 2) handled.
+
+**New bug surfaced (the pass's gift):** in slow mode the agent read the order
+back FROM MEMORY — no read_order call — and did its own arithmetic: spoken total
+3060 vs real 3370 LKR (verified: 2x1250 + 2x260 + 350 = 3370). Caller confirmed
+on a wrong number. LLMs cannot be trusted with arithmetic — it's a fact about
+the model class, not a rule-following issue. Fix: rule 5 made absolute —
+"NEVER do order math yourself... the number in read_order is the only total",
+applied to every read-back, not just pre-confirm. Read-back-before-confirm now
+means "read-back" = tool call, every single time.
+
 ## 6. Track record of lessons that generalise
 
 1. Verify library APIs against the installed version, never from memory (mistralai import
@@ -402,6 +423,10 @@ No optimization without a measurement.
     hallucinations this project ("plain" option, "no onion" question) were both
     legal menu fields. Wrong-tool and invented-fact bugs are real (see #7's onion
     census and the phantom add), but verify against ground truth first, always.
+11. Never let an LLM do arithmetic in production, even "easy" sums. The
+    frustration-test agent summed 2x1250 + 2x260 + 350 as 3060 (real: 3370) and
+    the caller confirmed a wrong total. Numbers spoken to users must come from
+    code (read_order), same as numbers stored (prices): tools own all numbers.
 
 ---
 

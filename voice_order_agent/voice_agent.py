@@ -90,13 +90,20 @@ def make_tools(box: ToolBox):
         return box.execute("set_pickup_time", {"time": time})
 
     @function_tool
+    async def note_frustration(context: RunContext, reason: str) -> str:
+        """Call ONCE when you detect the caller struggling ('what?', 'repeat',
+        asks to slow down, corrects you twice). Give a short reason. After this,
+        continue in slow step-by-step mode for the rest of the call."""
+        return box.execute("note_frustration", {"reason": reason})
+
+    @function_tool
     async def confirm_order(context: RunContext) -> str:
         """Lock the order. Requires items AND a pickup time. Only call after
         reading the order back and the caller agreed."""
         return box.execute("confirm_order", {})
 
     return [search_menu, filter_menu, add_item, update_item, remove_item,
-            read_order, set_pickup_time, confirm_order]
+            read_order, set_pickup_time, note_frustration, confirm_order]
 
 
 def warm_audio_resamplers() -> None:

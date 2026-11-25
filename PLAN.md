@@ -54,8 +54,16 @@ before audio is added.
         no-safe-boundary = no cut (oversized context beats corrupt context).
         24/24 tests. Voice side deliberately not pruned (calls are ~9 turns;
         LiveKit update_chat_ctx exists if ever needed).
-- [ ] 8. Frustration-aware recovery — track corrections, repeated interruptions, "what?"/"repeat";
+- [x] 8. Frustration-aware recovery — track corrections, repeated interruptions, "what?"/"repeat";
         switch to slow step-by-step mode
+        DONE: verified live. Trigger ("what? sorry, repeat") -> note_frustration
+        tool called on the FIRST trigger with reason logged; slow mode engaged and
+        HELD ("Sorry. One chicken fried rice. Okay?"), one item/one question at a
+        time through confirm; correction recovery worked. Evidence tool is pure
+        counter in ToolBox (eval data for step 12). NEW BUG FOUND: slow-mode read-
+        back was composed from MEMORY incl. arithmetic - spoken total 3060 vs real
+        3370 LKR (no read_order call). Rule 5 made absolute: LLM never does order
+        math; every read-back (not just pre-confirm) comes from read_order. 25/25.
 - [ ] 9. Model router — Mistral Small for normal turns, Meta Muse for hard ones, via the LLM proxy
 - [ ] 10. Persistence + kitchen screen — save confirmed orders (SQLite), simple live web page
 - [ ] 11. Latency logging — per turn: turn detection, STT, LLM first token, TTS first audio
