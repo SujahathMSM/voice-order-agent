@@ -38,7 +38,32 @@ def test_edit_after_confirm_is_text_not_crash():
 
 def test_unknown_tool_is_text_not_crash():
     box, _ = make_box()
-    assert box.execute("invent_new_dish", {}).startswith("Unknown tool")
+    assert box.execute("unknown_tool_xyz", {}).startswith("Unknown tool")
+
+
+def test_read_order_reflects_real_state():
+    """The lying-read-back bug from the step 6 voice test: agent claimed an
+    item was added when it never was. read_order is the ground truth."""
+    box, order = make_box()
+    result = box.execute("read_order", {})
+    assert result.startswith("The order is currently empty")
+    box.execute("add_item", {"menu_id": "roll-fish", "quantity": 2})
+    result = box.execute("read_order", {})
+    assert "2 x Fish Rolls" in result
+    assert "Chicken Kottu" not in result   # never ordered -> must not appear
+
+
+def test_add_item_rejects_invented_options():
+    """Only the menu decides legal options. kottu-chicken allows plain and
+    extra hot; anything else must come back as an ERROR string."""
+    box, order = make_box()
+    result = box.execute("add_item", {"menu_id": "kottu-chicken",
+                                       "quantity": 1, "options": ["pineapple"]})
+    assert result.startswith("ERROR:")
+    assert len(order.lines) == 0                      # nothing was added
+    result = box.execute("add_item", {"menu_id": "kottu-chicken",
+                                       "quantity": 1, "options": ["extra hot"]})
+    assert result.startswith("Added line 1")
 
 
 def test_search_menu_returns_json_ids():

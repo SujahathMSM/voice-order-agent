@@ -1,4 +1,5 @@
 """Step 5: the voice agent. LiveKit runs the loop; our ToolBox stays the brain."""
+import asyncio
 import json
 
 from livekit.agents import (
@@ -43,7 +44,9 @@ def make_tools(box: ToolBox):
     async def search_menu(context: RunContext, query: str) -> str:
         """Search the menu by what the caller said. Use when they ask about
         items, prices, ingredients, or when a dish name is unclear."""
-        return box.execute("search_menu", {"query": query})
+        # to_thread: the embedding API call is network I/O. Running it on the
+        # event loop froze audio handling ~1s per search (seen in step 6 logs).
+        return await asyncio.to_thread(box.execute, "search_menu", {"query": query})
 
     @function_tool
     async def filter_menu(context: RunContext, no_onions: bool = False,
@@ -52,6 +55,12 @@ def make_tools(box: ToolBox):
         onions?', 'what is vegetarian?', 'nothing spicy'."""
         return box.execute("filter_menu", {
             "no_onions": no_onions, "veg_only": veg_only, "max_spicy": max_spicy})
+
+    @function_tool
+    async def read_order(context: RunContext) -> str:
+        """Read the current order state: every line, quantity, options and total.
+        ALWAYS call before reading the order back to the caller."""
+        return box.execute("read_order", {})
 
     @function_tool
     async def add_item(context: RunContext, menu_id: str,
@@ -79,8 +88,8 @@ def make_tools(box: ToolBox):
         """Lock the order after reading it back and the caller agreed."""
         return box.execute("confirm_order", {})
 
-    return [search_menu, filter_menu, add_item, update_item,
-            remove_item, confirm_order]
+    return [search_menu, filter_menu, add_item, update_item, remove_item,
+            read_order, confirm_order]
 
 
 def warm_audio_resamplers() -> None:

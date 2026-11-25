@@ -93,6 +93,17 @@ TOOLS_SPEC = [
     {
         "type": "function",
         "function": {
+            "name": "read_order",
+            "description": "Read the CURRENT order state: every line, quantity, options, "
+                           "line number and total. ALWAYS call this before reading an "
+                           "order back to the caller, and describe the order ONLY from "
+                           "its result - never from memory of the conversation.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "confirm_order",
             "description": "Lock the order after reading it back and the caller agreed. "
                            "No changes possible after this.",
@@ -114,6 +125,7 @@ class ToolBox:
             "update_item": self._update_item,
             "remove_item": self._remove_item,
             "filter_menu": self._filter_menu,
+            "read_order": self._read_order,
             "confirm_order": self._confirm_order,
         }
 
@@ -145,9 +157,16 @@ class ToolBox:
         if item is None:
             return (f"ERROR: unknown menu id '{menu_id}'. "
                     f"Call search_menu first and use one of the returned ids.")
+        # Validation: the menu owns the list of legal options, not the LLM.
+        requested = args.get("options") or []
+        allowed = item.get("options", [])
+        unknown = [o for o in requested if o not in allowed]
+        if unknown:
+            return (f"ERROR: '{', '.join(unknown)}' is not an option for "
+                    f"{item['name']}. Allowed options: {allowed or 'none'}.")
         line = self.order.add_item(
             menu_id, item["name"], item["unit"] if "unit" in item else item["price"],
-            quantity=args.get("quantity", 1), options=args.get("options", []),
+            quantity=args.get("quantity", 1), options=requested,
         )
         return f"Added line {line.line_id}: {line.quantity} x {line.name}. Current total: {self.order.total} LKR"
 
@@ -178,6 +197,10 @@ class ToolBox:
             [{"id": i["id"], "name": i["name"], "price": i["price"], "spicy": i["spicy"]}
              for i in items],
             ensure_ascii=False)
+
+    def _read_order(self, args: dict) -> str:
+        """Ground truth for read-backs. Kills 'agent misreported the order' bugs."""
+        return self.order.summary().replace("\n", " | ")
 
     def _confirm_order(self, args: dict) -> str:
         return "CONFIRMED:\n" + self.order.confirm_order()
