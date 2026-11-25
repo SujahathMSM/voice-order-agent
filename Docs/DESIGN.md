@@ -362,6 +362,26 @@ locks". A refused confirm now leaves the order editable (safe failure mode); the
 test's setup was stale, not the product behavior. Pinned the new semantics
 (`status == "open"` after refused confirm) in `test_confirm_blocks_without_pickup_time`.
 
+## 5e. Context & history management (Step 8, DONE)
+
+**Problem:** LLMs have no memory — every call re-sends the whole conversation;
+long calls mean slow turns, cost, and stale search results lingering in context.
+
+**Why aggressive trimming is safe HERE (step-3 payoff):** the order lives in the
+`Order` object and prices in `menu.json` — chat history is decoration. The only
+hazard is cutting an assistant tool_call away from its tool results (orphaned
+answers confuse the model).
+
+**Design:** `prune_messages()` — pure, testable, no client. keep=24; system prompt
+always kept; cut point advances to the next USER message (an exchange boundary);
+if none exists in range, refuse to cut. Failure direction chosen deliberately:
+oversized context (annoying, costs tokens) beats corrupt context (a bug).
+No cut is ever taken mid-exchange; tests pin all three properties.
+
+**Voice side decision:** NOT pruned — longest real call so far is ~9 turns, and
+LiveKit exposes `session.update_chat_ctx` if evaluation ever shows degradation.
+No optimization without a measurement.
+
 ## 6. Track record of lessons that generalise
 
 1. Verify library APIs against the installed version, never from memory (mistralai import
