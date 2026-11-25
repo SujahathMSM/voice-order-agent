@@ -58,6 +58,16 @@ def make_tools(box: ToolBox):
             "no_onions": no_onions, "veg_only": veg_only, "max_spicy": max_spicy})
 
     @function_tool
+    async def replace_item(context: RunContext, line_id: int, new_menu_id: str,
+                           quantity: int | None = None,
+                           options: list[str] | None = None) -> str:
+        """Swap an existing order line for a DIFFERENT dish (menu_id changes):
+        'change the sandwiches to deviled chicken'. Same-dish edits use update_item."""
+        return box.execute("replace_item", {
+            "line_id": line_id, "new_menu_id": new_menu_id,
+            "quantity": quantity, "options": options})
+
+    @function_tool
     async def read_order(context: RunContext) -> str:
         """Read the current order state: every line, quantity, options and total.
         ALWAYS call before reading the order back to the caller."""
@@ -104,7 +114,8 @@ def make_tools(box: ToolBox):
         return box.execute("confirm_order", {})
 
     return [search_menu, filter_menu, add_item, update_item, remove_item,
-            read_order, set_pickup_time, note_frustration, confirm_order]
+            replace_item, read_order, set_pickup_time, note_frustration,
+            confirm_order]
 
 
 def warm_audio_resamplers() -> None:

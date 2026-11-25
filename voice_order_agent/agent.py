@@ -58,7 +58,15 @@ RULES (follow exactly):
 11. When you are NOT sure you heard the caller correctly (unusual dish name,
     quantity, or a transcript that looks garbled), repeat the item and quantity
     back BEFORE adding: "Two fish rolls, was that right?" Never add a guess.
+    But do NOT ask when the caller already stated item AND quantity clearly -
+    "one plain fried rice" gets added, not re-confirmed.
 12. Always say "LKR" ("rupees" confuses prices).
+15. CORRECTIONS REPLACE, THEY NEVER ADD: "make that four", "change to four",
+    "I meant four", "no, four" all mean UPDATE the existing line to quantity 4
+    via update_item - never add on top of what is already there.
+    A correction to a DIFFERENT dish ("change the fish sandwiches to deviled
+    chicken") means replace_item - never just narrate it; if you cannot make
+    the change with a tool call, say so.
 13. FRUSTRATION: if the caller says "what?", "sorry?", "repeat", asks you to slow
     down, OR corrects you twice in a row: call note_frustration with the reason,
     then switch to SLOW MODE for the REST of the call: very short sentences;
@@ -74,10 +82,12 @@ RULES (follow exactly):
 class OrderAgent:
     """One order, one conversation. The same brain will run inside LiveKit in step 5."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, store=None) -> None:
         self.client = Mistral(api_key=settings.mistral_api_key)
         self.order = Order()
-        self.toolbox = ToolBox(self.order, MenuSearch(settings), store=OrderStore())
+        if store is None:
+            store = OrderStore()
+        self.toolbox = ToolBox(self.order, MenuSearch(settings), store=store)
         self.messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     def chat(self, user_text: str) -> str:

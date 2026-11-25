@@ -93,6 +93,27 @@ TOOLS_SPEC = [
     {
         "type": "function",
         "function": {
+            "name": "replace_item",
+            "description": "Swap an existing order line for a DIFFERENT dish "
+                           "(menu_id changes): 'change the sandwiches to deviled "
+                           "chicken', 'make the fried rice a seafood one'. Does NOT "
+                           "change quantity/options unless given. For same-dish "
+                           "quantity/option edits use update_item.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "line_id": {"type": "integer"},
+                    "new_menu_id": {"type": "string"},
+                    "quantity": {"type": "integer"},
+                    "options": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["line_id", "new_menu_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "read_order",
             "description": "Read the CURRENT order state: every line, quantity, options, "
                            "line number and total. ALWAYS call this before reading an "
@@ -156,6 +177,7 @@ class ToolBox:
             "add_item": self._add_item,
             "update_item": self._update_item,
             "remove_item": self._remove_item,
+            "replace_item": self._replace_item,
             "filter_menu": self._filter_menu,
             "read_order": self._read_order,
             "set_pickup_time": self._set_pickup_time,
@@ -231,6 +253,31 @@ class ToolBox:
             [{"id": i["id"], "name": i["name"], "price": i["price"], "spicy": i["spicy"]}
              for i in items],
             ensure_ascii=False)
+
+    def _replace_item(self, args: dict) -> str:
+        line_id = args["line_id"]
+        new_id = args["new_menu_id"]
+        item = MENU.get(new_id)
+        if item is None:
+            return (f"ERROR: unknown menu id '{new_id}'. "
+                    f"Call search_menu first and use one of the returned ids.")
+        requested = args.get("options") 
+        if requested is not None:          # validate exactly like add_item
+            allowed = item.get("options", [])
+            unknown = [o for o in requested if o not in allowed]
+            if unknown:
+                return (f"ERROR: '{', '.join(unknown)}' is not an option for "
+                        f"{item['name']}. Allowed options: {allowed or 'none'}.")
+        line = self.order.replace_item(
+            line_id, new_id, item["name"],
+            item["unit"] if "unit" in item else item["price"],
+            quantity=args.get("quantity"),
+            options=requested)   # None keeps the line's existing options
+        return (f"Replaced line {line.line_id}: now {self._describe_line(line)}")
+
+    def _describe_line(self, line) -> str:
+        options = f" ({', '.join(line.options)})" if line.options else ""
+        return f"{line.quantity} x {line.name}{options}. Total: {self.order.total} LKR"
 
     def _read_order(self, args: dict) -> str:
         """Ground truth for read-backs. Kills 'agent misreported the order' bugs."""

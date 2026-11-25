@@ -452,7 +452,29 @@ metrics_collected deprecation warning (still functional; migrate to
 ChatMessage.metrics if an upgrade breaks it). Polish bug: same dish added twice
 renders as two lines (1x + 10x hoppers, total correct) -> future add_item merge.
 
-## 6. Track record of lessons that generalise
+## 5j. Evaluation harness (Step 12, DONE — brain 12/12)
+
+**Scripts:** eval_scenarios.py — 12 scenarios / 12 categories mapped to project
+war stories (accent-mangle S03, merge S05, AM-pickup S08, frustration S09,
+double-correction S12). evaluate.py — score_order is a PURE function (7 tests of
+its own), text runner drives the shared brain (rules+tools) in a TEMP DB
+(eval must never pollute production data), live runner scores the latest
+confirmed order from SQLite after human-spoken calls.
+
+**The score journey (the real lesson):** 25% -> 83% -> 100%. Each run's failures
+were LABELED, not vibed:
+- rule-15 fix: "make that four" was ADD-interpreted (1+4=5) — corrections REPLACE
+- replace_item tool: S12 agent NARRATED "changed to deviled chicken" and the order
+  still had fish — the toolbox had NO primitive to swap a line's dish. Toolbox
+  gap, not model fault (same lesson as the onion census). Data-layer fix + 3 tests.
+- harness: monologue scripts drifted past agent questions (scenarios must model
+  a COOPERATIVE caller); rule 6 forces "shall I confirm?" so scripts need closer
+  turns; eval confirmed orders were landing in the real orders.db (temp DB now).
+- rule 11 cooled: over-asking re-confirmed stated-clear items, starving the flow.
+
+**Next measurement:** live voice-chain eval — same 12 scenarios spoken through
+Test in Console, scored from SQLite. text(100%) minus live(?) = THE STT TAX,
+the opening argument for step 13's Muse Voice Transcribe comparison.
 
 ## 6. Track record of lessons that generalise
 

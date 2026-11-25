@@ -70,6 +70,24 @@ class Order:
         line = self.find_line(line_id)
         self.lines.remove(line)
 
+    def replace_item(self, line_id: int, new_menu_id: str, new_name: str,
+                     new_unit_price: int,
+                     quantity: Optional[int] = None,
+                     options: Optional[list[str]] = None) -> OrderLine:
+        """Swap a line for a DIFFERENT dish ('change the fish sandwiches to
+        deviled chicken'). The data-layer primitive for replacements - without
+        it the LLM narrates the change instead of executing it (eval S12)."""
+        self._check_editable()
+        line = self.find_line(line_id)
+        line.menu_id = new_menu_id
+        line.name = new_name
+        line.unit_price = new_unit_price
+        if quantity is not None:
+            line.quantity = quantity
+        if options is not None:
+            line.options = list(options)
+        return line
+
     def find_line(self, line_id: int) -> OrderLine:
         for line in self.lines:
             if line.line_id == line_id:

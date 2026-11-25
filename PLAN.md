@@ -89,7 +89,14 @@ before audio is added.
         Tech debt: metrics_collected deprecated (-> ChatMessage.metrics on upgrade).
         Polish bug noted: duplicate dish lines not merged (1+10 hoppers read as
         two lines, total still correct).
-- [ ] 12. Evaluation — ~20 scripted test calls, measure order accuracy (numbers must be normalized)
+- [x] 12. Evaluation — ~20 scripted test calls, measure order accuracy (numbers must be normalized)
+        DONE (brain eval): 12-scenario harness (evaluate.py + eval_scenarios.py), pure-function
+        scorer (quantity/options/pickup/confirmed diff), text + live runners, temp DB isolation.
+        SCORE JOURNEY: 25% -> 83% -> 100% (12/12). Fixes it drove: rule 15 (corrections
+        replace never add), replace_item tool (S12 narration bug: no swap primitive existed -
+        toolbox gap not model fault), cooperative-caller scenarios + closer turns, eval DB
+        pollution fixed, network retry. Remaining: LIVE voice-chain eval (speak scenarios via
+        Test in Console, score from SQLite) - the text-vs-voice gap is the STT tax for step 13.
 - [ ] 13. Comparisons — Mistral's ready-made voice agent and a fully local pipeline on the same calls
         ADD: also test Meta Muse Voice Transcribe (real-time STT with keyword biasing —
         does it fix "kottu"? compare WER + latency vs Voxtral on the same 10 recordings)
