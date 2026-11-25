@@ -87,6 +87,19 @@ def test_confirm_blocks_without_pickup_time():
     assert result.startswith("CONFIRMED:") and "Pickup at 18:30" in result
 
 
+def test_frustration_events_accumulate_but_touch_nothing():
+    """Evidence tool only: counts events, never changes order state."""
+    box, order = make_box()
+    box.execute("add_item", {"menu_id": "roll-fish", "quantity": 1})
+    lines_before = len(order.lines)
+    box.execute("note_frustration", {"reason": "caller said what? twice"})
+    assert len(box.frustration_events) == 1
+    assert order.status == "open" and len(order.lines) == lines_before
+    box.execute("note_frustration", {"reason": "asked to repeat total"})
+    assert box.frustration_events[1] == "asked to repeat total"
+    assert "slow mode" in box.execute("note_frustration", {"reason": "third"})
+
+
 def test_search_menu_returns_json_ids():
     box, _ = make_box()
     result = box.execute("search_menu", {"query": "fish rolls"})
