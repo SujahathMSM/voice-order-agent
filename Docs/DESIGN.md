@@ -403,6 +403,57 @@ the model class, not a rule-following issue. Fix: rule 5 made absolute —
 applied to every read-back, not just pre-confirm. Read-back-before-confirm now
 means "read-back" = tool call, every single time.
 
+## 5g. Persistence + kitchen screen (Step 10, DONE)
+
+**Store:** SQLite (`data/orders.db`), two tables, one-to-many (orders, order_items) —
+chosen because the questions are relational ("how many kottu today" = one SUM query
+via item_sales_count; painful with a JSON column). Only CONFIRMED orders are ever
+saved; double-save rejected; `save_order` is the only code that writes, called
+inside `confirm_order` — the same code path that locks the order persists it, so no
+"forgot to save" tool call can exist. Confirm result is prefixed "ORDER #N CONFIRMED",
+so speaking the order number costs the LLM nothing (and rule 14 now requires it —
+first run skipped it: behavior gap found live, fixed live).
+
+**Kitchen screen:** stdlib http.server + polling every 3s on localhost:8765.
+Deliberately no frameworks/websockets: v1 measured in use beats v2 imagined.
+
+**Verified live:** spoken order == DB row == screen card (2x fried rice, 1 juice,
+2850 LKR, pickup 21:00, timestamp to the second). Honesty note: the agent again
+read the total without calling read_order - but the number was correct because it
+echoed the "Current total: N LKR" from add_item results rather than doing math.
+Lesson 11 (tools own numbers) held; the read_order protocol was bent not broken.
+Eval (step 12) will watch this - if a wrong total ever surfaces, read_order becomes
+a hard requirement enforced in the tool layer, not a prompt rule.
+
+**Step-10 checks (worth keeping):** (a) relational schema exists because of
+item_sales_count - one SUM query vs parse-every-row JSON; shape the store for the
+questions you'll ask. (b) save_order rides the confirm path because an LLM tool
+would be hope-not-guarantee: we've watched the model skip told steps; confirm and
+persist are one atomic code path. (c) Refresh mid-call is safe: per-operation
+connections, kitchen only READS, agent only WRITES; SQLite = many readers + one
+writer, page is at most one poll stale. Caveat logged: at multi-worker scale,
+single-writer SQLite meets "database is locked" - the Postgres line.
+
+## 5i. Latency logging (Step 11, DONE — first real numbers)
+
+**First measurement (12-turn call, avg/max ms):** EOU 2296/5234, STT transcription
+2075/5230, LLM ttft 1157/2887 (n=24), TTS ttfb 1046/1564. Caller-felt silence
+~4.5-6s per turn; ~70% of it is the STT finals problem being PAID TWICE: Voxtral's
+final transcripts arrive late -> EOT confidence low -> LiveKit hedges with the
+conservative 2.5s endpointing delay -> both EOU and transcription columns inflate.
+LLM+TTS combined 2.2s is fine. Engineering conclusion: highest-leverage upgrade
+is the STT layer -> step 13's Muse Voice Transcribe comparison is now the
+data-backed next move, and endpointing min_delay is the cheaper knob.
+
+**Session bonus findings:** rule 14 verified ("your order number is 2, please
+bring this number to the counter"); frustration tool fired on unclear pickup
+time ("eight billion" mangle -> asked "Eight PM. Is that right?" -> recovered);
+metrics_collected deprecation warning (still functional; migrate to
+ChatMessage.metrics if an upgrade breaks it). Polish bug: same dish added twice
+renders as two lines (1x + 10x hoppers, total correct) -> future add_item merge.
+
+## 6. Track record of lessons that generalise
+
 ## 6. Track record of lessons that generalise
 
 1. Verify library APIs against the installed version, never from memory (mistralai import

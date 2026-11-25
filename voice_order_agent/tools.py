@@ -145,9 +145,11 @@ TOOLS_SPEC = [
 class ToolBox:
     """Wires the tools to one Order + one MenuSearch. Owns execute_tool."""
 
-    def __init__(self, order: Order, searcher: MenuSearch) -> None:
+    def __init__(self, order: Order, searcher: MenuSearch,
+                 store=None) -> None:
         self.order = order
         self.searcher = searcher
+        self.store = store   # optional OrderStore: confirmed orders get persisted
         self.frustration_events: list[str] = []   # evidence for evaluation (step 12)
         self.handlers: dict[str, Callable[[dict], str]] = {
             "search_menu": self._search_menu,
@@ -270,4 +272,11 @@ class ToolBox:
                 f"Continue in slow mode: short sentences, one item and one question at a time.")
 
     def _confirm_order(self, args: dict) -> str:
-        return "CONFIRMED:\n" + self.order.confirm_order()
+        text = "CONFIRMED:\n" + self.order.confirm_order()
+        if self.store is not None:
+            # persist in the SAME code path that locks the order: one truth
+            from datetime import datetime
+            order_id = self.store.save_order(
+                self.order, confirmed_at=datetime.now().isoformat(timespec="seconds"))
+            text = f"ORDER #{order_id} " + text
+        return text
