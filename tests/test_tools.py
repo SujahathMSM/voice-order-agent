@@ -31,6 +31,7 @@ def test_unknown_menu_id_is_text_not_crash():
 def test_edit_after_confirm_is_text_not_crash():
     box, _ = make_box()
     box.execute("add_item", {"menu_id": "roll-fish"})
+    box.execute("set_pickup_time", {"time": "18:30"})   # gate: no lock without it
     box.execute("confirm_order", {})
     result = box.execute("update_item", {"line_id": 1, "quantity": 5})
     assert result.startswith("ERROR: Order is confirmed")
@@ -64,6 +65,26 @@ def test_add_item_rejects_invented_options():
     result = box.execute("add_item", {"menu_id": "kottu-chicken",
                                        "quantity": 1, "options": ["extra hot"]})
     assert result.startswith("Added line 1")
+
+
+def test_pickup_time_normalizes_and_rejects_garbage():
+    box, order = make_box()
+    assert box.execute("set_pickup_time", {"time": "6:30 PM"}) == "Pickup time set to 18:30."
+    assert order.pickup_time == "18:30"
+    assert "18:30" in box.execute("set_pickup_time", {"time": "18:30"})
+    garbage = box.execute("set_pickup_time", {"time": "tomorrow-ish"})
+    assert garbage.startswith("ERROR:")
+
+
+def test_confirm_blocks_without_pickup_time():
+    box, order = make_box()
+    box.execute("add_item", {"menu_id": "roll-fish", "quantity": 2})
+    result = box.execute("confirm_order", {})
+    assert result.startswith("ERROR:")           # tools catch, text not crash
+    assert order.status == "open"                # gate refused: nothing locked
+    box.execute("set_pickup_time", {"time": "6:30 pm"})
+    result = box.execute("confirm_order", {})
+    assert result.startswith("CONFIRMED:") and "Pickup at 18:30" in result
 
 
 def test_search_menu_returns_json_ids():

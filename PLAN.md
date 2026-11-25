@@ -41,7 +41,13 @@ before audio is added.
         with prompt rules 8-9; options validated against menu.json in _add_item.
         16/16 tests. Note: interruption handling came from AgentSession defaults -
         the work was VERIFICATION + tuning, not building.
-- [ ] 7. Read-back — confirm items, quantities and pickup time; also when STT confidence is low
+- [x] 7. Read-back — confirm items, quantities and pickup time; also when STT confidence is low
+        DONE: Order.pickup_time + set_pickup_time tool (normalizes '6:30 PM'/'18:30',
+        rejects garbage); confirm_order hard-gates on pickup time (data layer, not
+        prompt); read_order read-backs include pickup; garbled times get repeated
+        back not guessed ('9.70' -> "Did you mean 7 PM?"). 20/20 tests. Live findings
+        fixed in prompt: PM must be asked not assumed; call must not end unconfirmed;
+        say LKR not rupees.
 - [ ] 8. Frustration-aware recovery — track corrections, repeated interruptions, "what?"/"repeat";
         switch to slow step-by-step mode
 - [ ] 9. Model router — Mistral Small for normal turns, Meta Muse for hard ones, via the LLM proxy

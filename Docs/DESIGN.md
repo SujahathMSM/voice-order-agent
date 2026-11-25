@@ -253,7 +253,7 @@ removal, read-back then confirm, drinks upsell post-confirmation.
 
 
 
-## 5b. Voice pipeline — LiveKit + Voxtral (Step 5, in progress)
+## 5b. Voice pipeline — LiveKit + Voxtral (Step 5, DONE)
 
 **Files:** `voice_order_agent/voice_agent.py`
 
@@ -336,7 +336,33 @@ verification and reading logs, not building it. Frameworks give the 90%; the las
 "hallucination" what was actually legal data (kottu's "plain" option, seafood
 rice's "no onion"): lesson #10 below.
 
+---
 
+## 5d. Read-back hardening + pickup time (Step 7, DONE)
+
+**Design:** a phone order is not done until it has items + a pickup time + an agreed
+read-back. So pickup is DATA, not chat: `Order.pickup_time` field, `set_pickup_time`
+tool normalizes spoken time ("6:30 PM" / "18:30" -> HH:MM 24h; garbage -> ERROR text
+with recovery suggestion), and `confirm_order` raises without it — same
+data-layer-over-prompt principle as the step-3 lock. `summary()` appends
+"Pickup at HH:MM" so every read_order repeats it.
+
+**Live evidence:**
+- Gate fired correctly: "confirm the order" with no time -> agent ASKED for pickup.
+- Rule 10 proved itself on a garbled time ("9.70"): repeated back as a question
+  ("Did you mean 7:00 PM?"), caller confirmed, then locked. No blind writes.
+- Found in the same session, fixed in prompt rules 5/6/12: (a) PM was ASSUMED from
+  "6.30" — morning vs evening must be asked, never guessed; (b) a call ended with
+  the order still open (drifted to drinks + goodbye) — rule 6 now forces the confirm
+  loop; (c) "rupees" was spoken instead of LKR.
+
+**Test note (teachable failure):** adding the pickup gate broke
+`test_edit_after_confirm_is_text_not_crash` — its setup relied on "confirm always
+locks". A refused confirm now leaves the order editable (safe failure mode); the
+test's setup was stale, not the product behavior. Pinned the new semantics
+(`status == "open"` after refused confirm) in `test_confirm_blocks_without_pickup_time`.
+
+## 6. Track record of lessons that generalise
 
 1. Verify library APIs against the installed version, never from memory (mistralai import
    restructure).
