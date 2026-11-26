@@ -3,7 +3,7 @@
   "currency": "LKR",
   "items": [
     {"id": "kottu-chicken", "name": "Chicken Kottu", "price": 1450, "description": "Chopped roti stir-fried with chicken, egg, curry leaves and spices on the flat grill.", "spicy": 2, "contains_onions": true, "veg": false, "options": ["extra hot", "plain"], "aliases": ["koththu", "kothu", "kottu roti"]},
-    {"id": "kottu-veg", "name": "Vegetable Kottu", "price": 1100, "description": "Roti chopped on the grill mixed with carrots, leeks and green chili.", "spicy": 2, "contains_onions": true, "veg": true, "options": ["extra hot", "plain"], "aliases": ["koththu", "vegetarian kottu"]},
+    {"id": "kottu-veg", "name": "Vegetable Kottu", "price": 1100, "description": "Roti chopped on the grill mixed with carrots, leeks and green chili.", "spicy": 2, "contains_onions": true, "veg": true, "options": ["extra hot", "plain"], "aliases": ["vegetarian kottu", "veg kottu"]},
     {"id": "kottu-cheese", "name": "Cheese Kottu", "price": 1600, "description": "Chicken kottu melted with mozzarella and a dash of chili oil.", "spicy": 1, "contains_onions": true, "veg": false, "options": ["extra hot", "plain"], "aliases": ["cheese koththu"]},
     {"id": "rice-fried-plain", "name": "Plain Fried Rice", "price": 950, "description": "Wok-tossed rice with egg and spring onion, no chili.", "spicy": 0, "contains_onions": true, "veg": true, "options": ["extra butter", "no onion"], "aliases": ["normal fried rice", "fried rice plain"]},
     {"id": "rice-fried-chicken", "name": "Chicken Fried Rice", "price": 1250, "description": "Fried rice with diced chicken, egg and vegetables.", "spicy": 1, "contains_onions": true, "veg": false, "options": ["extra hot", "no onion"], "aliases": ["chicken rice"]},

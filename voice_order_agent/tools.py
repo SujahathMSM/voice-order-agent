@@ -186,15 +186,35 @@ class ToolBox:
         }
 
     def execute(self, name: str, args: dict) -> str:
-        """Run one tool call. ALWAYS returns text: errors become messages for the LLM."""
+        """Run one tool call. ALWAYS returns text: errors become messages for the LLM.
+        Catches EVERYTHING: an escaping exception kills the conversation, and
+        LLMs send string numbers / missing keys often enough to matter."""
         tool = self.handlers.get(name)
         if tool is None:
             return f"Unknown tool: {name}"
+        if not isinstance(args, dict):
+            return "ERROR: tool arguments must be an object."
         try:
             return tool(args)
-        except (ValueError, RuntimeError) as e:
-            # Exceptions kill the conversation. Text lets the LLM recover gracefully.
+        except KeyError as e:
+            return (f"ERROR: missing argument {e}. Ask the caller if unclear, "
+                    f"or call the tool again with the required fields.")
+        except (ValueError, TypeError, RuntimeError) as e:
+            # business rules and bad values: the message itself is useful
             return f"ERROR: {e}"
+        except Exception as e:   # noqa: BLE001 - a tool must never crash a call
+            return (f"ERROR: internal failure in {name} ({type(e).__name__}). "
+                    f"Tell the caller to hold and try again.")
+
+    @staticmethod
+    def _as_int(value, field: str) -> int:
+        """LLMs send numbers as strings ('2' not 2). Coerce, then validate."""
+        if isinstance(value, str):
+            value = value.strip()
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            raise TypeError(f"{field} must be a whole number, got {value!r}")
 
     def _search_menu(self, args: dict) -> str:
         results = self.searcher.search(args["query"], k=3)
@@ -222,21 +242,36 @@ class ToolBox:
                     f"{item['name']}. Allowed options: {allowed or 'none'}.")
         line = self.order.add_item(
             menu_id, item["name"], item["unit"] if "unit" in item else item["price"],
-            quantity=args.get("quantity", 1), options=requested,
+            quantity=self._as_int(args.get("quantity", 1), "quantity"),
+            options=requested,
         )
         return f"Added line {line.line_id}: {line.quantity} x {line.name}. Current total: {self.order.total} LKR"
 
     def _update_item(self, args: dict) -> str:
+        # Options are menu facts: validate add_options exactly like add_item.
+        # (The LLM must not attach 'pineapple' to a kottu by imagination.)
+        if args.get("add_options"):
+            line = self.order.find_line(self._as_int(args["line_id"], "line_id"))
+            item = MENU.get(line.menu_id, {})
+            allowed = item.get("options", [])
+            unknown = [o for o in args["add_options"] if o not in allowed]
+            if unknown:
+                return (f"ERROR: '{', '.join(unknown)}' is not an option for "
+                        f"{item.get('name', line.name)}. "
+                        f"Allowed options: {allowed or 'none'}.")
         line = self.order.update_item(
-            args["line_id"], quantity=args.get("quantity"),
+            self._as_int(args["line_id"], "line_id"),
+            quantity=(self._as_int(args["quantity"], "quantity")
+                      if args.get("quantity") is not None else None),
             add_options=args.get("add_options"))
         return f"Updated line {line.line_id}: {line.quantity} x {line.name}" \
                + (f" ({', '.join(line.options)})" if line.options else "") \
                + f". Current total: {self.order.total} LKR"
 
     def _remove_item(self, args: dict) -> str:
-        self.order.remove_item(args["line_id"])
-        return f"Removed line {args['line_id']}. Current total: {self.order.total} LKR"
+        line_id = self._as_int(args["line_id"], "line_id")
+        self.order.remove_item(line_id)
+        return f"Removed line {line_id}. Current total: {self.order.total} LKR"
 
     def _filter_menu(self, args: dict) -> str:
         """Whole-catalog exact filter. No embeddings, no API, always complete."""
@@ -246,7 +281,8 @@ class ToolBox:
         if args.get("veg_only"):
             items = [i for i in items if i["veg"]]
         if args.get("max_spicy") is not None:
-            items = [i for i in items if i["spicy"] <= args["max_spicy"]]
+            max_spicy = self._as_int(args["max_spicy"], "max_spicy")
+            items = [i for i in items if i["spicy"] <= max_spicy]
         if not items:
             return "No items match that filter."
         return json.dumps(
@@ -255,13 +291,13 @@ class ToolBox:
             ensure_ascii=False)
 
     def _replace_item(self, args: dict) -> str:
-        line_id = args["line_id"]
+        line_id = self._as_int(args["line_id"], "line_id")
         new_id = args["new_menu_id"]
         item = MENU.get(new_id)
         if item is None:
             return (f"ERROR: unknown menu id '{new_id}'. "
                     f"Call search_menu first and use one of the returned ids.")
-        requested = args.get("options") 
+        requested = args.get("options")
         if requested is not None:          # validate exactly like add_item
             allowed = item.get("options", [])
             unknown = [o for o in requested if o not in allowed]
@@ -271,8 +307,9 @@ class ToolBox:
         line = self.order.replace_item(
             line_id, new_id, item["name"],
             item["unit"] if "unit" in item else item["price"],
-            quantity=args.get("quantity"),
-            options=requested)   # None keeps the line's existing options
+            quantity=(self._as_int(args["quantity"], "quantity")
+                      if args.get("quantity") is not None else None),
+            options=requested)   # None DISCARDS the old dish's options (by design)
         return (f"Replaced line {line.line_id}: now {self._describe_line(line)}")
 
     def _describe_line(self, line) -> str:
@@ -285,16 +322,22 @@ class ToolBox:
 
     @staticmethod
     def _normalize_time(raw: str) -> str | None:
-        """'6:30 pm'/'18:30'/'7 pm' -> 'HH:MM' 24h. None if unparseable."""
+        """'6:30 pm'/'18:30'/'6.30 pm' -> 'HH:MM' 24h. None if unparseable
+        OR ambiguous: a bare hour 1-11 with no AM/PM is a guess, and rule 5
+        says never guess morning vs evening - return None and let the agent ask."""
         import re
-        match = re.fullmatch(
-            r"\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*",
-            raw.strip().lower().replace(".", ""))
+        text = raw.strip().lower()
+        text = re.sub(r"(\d)\.(\d)", r"\1:\2", text)   # '6.30 pm' (Voxtral style)
+        match = re.fullmatch(r"\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*", text)
         if not match:
             return None
         hour = int(match.group(1))
         minute = int(match.group(2) or 0)
         meridiem = match.group(3)
+        if meridiem and hour > 12:        # '13 pm' is not a time
+            return None
+        if not match.group(2) and meridiem is None and 1 <= hour <= 12:
+            return None                  # bare hour: AM or PM is a guess
         if meridiem == "pm" and hour < 12:
             hour += 12
         if meridiem == "am" and hour == 12:
@@ -319,11 +362,23 @@ class ToolBox:
                 f"Continue in slow mode: short sentences, one item and one question at a time.")
 
     def _confirm_order(self, args: dict) -> str:
-        text = "CONFIRMED:\n" + self.order.confirm_order()
+        # ATOMIC with the save: if persistence fails, the lock is REVERTED
+        # (review bug 1). A caller told 'confirmed' must always have a DB row,
+        # and a failed save must leave the call retryable.
+        from datetime import datetime
         if self.store is not None:
-            # persist in the SAME code path that locks the order: one truth
-            from datetime import datetime
-            order_id = self.store.save_order(
-                self.order, confirmed_at=datetime.now().isoformat(timespec="seconds"))
-            text = f"ORDER #{order_id} " + text
-        return text
+            try:
+                self.order.confirm_order()          # locks (checks empty/pickup)
+            except (ValueError, RuntimeError):
+                raise                                # business rules: pass through
+            try:
+                order_id = self.store.save_order(
+                    self.order,
+                    confirmed_at=datetime.now().isoformat(timespec="seconds"))
+            except Exception as e:                   # noqa: BLE001
+                self.order.status = "open"           # revert: order can retry
+                raise RuntimeError(
+                    f"could not save the order, nothing was confirmed "
+                    f"({type(e).__name__}); try confirm_order again")
+            return f"ORDER #{order_id} CONFIRMED:\n" + self.order.summary()
+        return "CONFIRMED:\n" + self.order.confirm_order()

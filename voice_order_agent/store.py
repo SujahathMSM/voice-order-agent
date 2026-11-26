@@ -102,7 +102,8 @@ class OrderStore:
             result = []
             for o in orders:
                 items = conn.execute(
-                    "SELECT name, quantity, options FROM order_items WHERE order_id = ?",
+                    "SELECT menu_id, name, quantity, options FROM order_items"
+                    " WHERE order_id = ?",
                     (o["id"],)).fetchall()
                 result.append({
                     **{k: o[k] for k in o.keys()},

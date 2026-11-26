@@ -117,40 +117,17 @@ def run_live() -> None:
                 flat.pickup_time = row["pickup_time"]
                 from .order import OrderLine
                 for item in row["items"]:
-                    # score by name: ids aren't stored in the kitchen view;
-                    # match on name to keep live mode dependency-light
+                    # order_items stores menu_id, so live scoring uses the
+                    # same ids as the text runner. (The old name-map had a
+                    # Samosa/Samosas bug and was needless indirection.)
                     flat.lines.append(OrderLine(
-                        1, item["name"], item["name"], 0,
+                        1, item["menu_id"], item["name"], 0,
                         item["quantity"], (item.get("options") or "").split(", ")))
-                ok, problems = _score_by_name(flat, scenario["expected"])
+                ok, problems = score_order(flat, scenario["expected"])
+                print(f"(scored DB order #{row['id']})")
                 print("PASS" if ok else f"FAIL: {problems}")
         scenario_id = input(
             "\nNext scenario id to score (Enter to quit): ").strip()
-
-
-def _score_by_name(order: Order, expected: dict) -> tuple[bool, list[str]]:
-    """Live fallback: DB kitchen rows carry names, not menu ids."""
-    name_to_id = {  # enough for the scenario items
-        "Chicken Kottu": "kottu-chicken", "Soft Drink": "soda",
-        "Fish Rolls": "roll-fish", "Plain Fried Rice": "rice-fried-plain",
-        "Deviled Chicken Sandwich": "sandwich-deviled-chicken",
-        "Egg Hoppers": "hopper-egg", "Chicken Curry": "curry-chicken",
-        "Plain Tea": "tea-plain", "Fresh Salad": "salad-fresh",
-        "Seafood Fried Rice": "rice-fried-seafood", "Club Sandwich": "sandwich-club",
-        "Chicken Soup": "soup-chicken", "Woodapple Juice": "juice-woodapple",
-        "Milk Rice": "rice-milk", "Seeni Sambol": "sambol-seeni",
-        "Samosa": "samosa", "Deviled Fish Sandwich": "sandwich-deviled-fish",
-        "Chicken Noodles": "noodles-chicken", "Fish Curry": "curry-fish",
-    }
-    translated = Order()
-    translated.status = order.status
-    translated.pickup_time = order.pickup_time
-    from .order import OrderLine
-    for line in order.lines:
-        translated.lines.append(OrderLine(
-            line.line_id, name_to_id.get(line.menu_id, line.menu_id),
-            line.name, line.unit_price, line.quantity, line.options))
-    return score_order(translated, expected)
 
 
 def _report(results: list) -> None:
