@@ -90,11 +90,36 @@ class OrderAgent:
         self.toolbox = ToolBox(self.order, MenuSearch(settings), store=store)
         self.messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
-    def chat(self, user_text: str) -> str:
-        """One turn: append user text, loop tools if needed, return the agent's reply."""
-        self.messages = prune_messages(self.messages)
-        self.messages.append({"role": "user", "content": user_text})
+    def _snapshot_order(self):
+        """Deep copy of order state: chat() is all-or-nothing, and a failed
+        turn must not leave half-applied tool effects behind either."""
+        import copy
+        return (copy.deepcopy(self.order.lines), self.order.status,
+                self.order.pickup_time, self.order._next_id)
 
+    def _restore_order(self, snapshot) -> None:
+        import copy
+        (self.order.lines, self.order.status,
+         self.order.pickup_time, self.order._next_id) = copy.deepcopy(snapshot)
+
+    def chat(self, user_text: str) -> str:
+        """One turn: append user text, loop tools if needed, return the agent's
+        reply. ALL-OR-NOTHING: works on copies; on any failure (network flake,
+        malformed tool args) neither the message history nor the order keeps
+        partial effects, so a retry cannot double-add or orphan tool calls."""
+        order_snapshot = self._snapshot_order()
+        saved_messages = self.messages
+        new_messages = prune_messages(list(self.messages))
+        new_messages.append({"role": "user", "content": user_text})
+        try:
+            return self._chat_loop(new_messages)
+        except Exception:
+            self.messages = saved_messages
+            self._restore_order(order_snapshot)
+            raise
+
+    def _chat_loop(self, new_messages: list) -> str:
+        self.messages = new_messages
         for _ in range(MAX_TOOL_ROUNDS):
             response = self.client.chat.complete(
                 model="mistral-small-latest",
@@ -119,8 +144,15 @@ class OrderAgent:
                 ],
             })
             for tc in tool_calls:
-                args = json.loads(tc.function.arguments or "{}")
-                result = self.toolbox.execute(tc.function.name, args)
+                try:
+                    args = json.loads(tc.function.arguments or "{}")
+                except json.JSONDecodeError:
+                    args = None     # malformed: let execute() return ERROR text
+                if not isinstance(args, dict):
+                    args = None
+                result = (self.toolbox.execute(tc.function.name, args)
+                          if args is not None else
+                          "ERROR: malformed tool arguments; call the tool again.")
                 self.messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,

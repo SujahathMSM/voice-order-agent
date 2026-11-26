@@ -476,6 +476,45 @@ were LABELED, not vibed:
 Test in Console, scored from SQLite. text(100%) minus live(?) = THE STT TAX,
 the opening argument for step 13's Muse Voice Transcribe comparison.
 
+## 5k. External review, batch 1 fixes (reviewer: Claude, verified before fixing)
+
+An outside reviewer audited the whole codebase and found real bugs. Each was
+verified against our own logs before fixing. Accepted + fixed (each with a
+test in tests/test_review_fixes.py):
+1. LOST ORDER (tools._confirm_order): confirm locked the order and if the DB
+   save then failed, execute() only caught ValueError/RuntimeError -> OSError
+   escaped, order left confirmed-but-unsaved and unretryable. FIX: save failure
+   REVERTS the lock to "open" and returns ERROR text; retry works. The
+   reviewer's "save first, lock after" suggestion was rejected: the store's
+   refuse-unconfirmed guard is a design invariant.
+2. read_order hid line ids -> after a removal, ids drifted from positions and
+   edit tools need line_id from memory (prunable). Fixed: summary shows
+   "Line N:". (The reviewer's second bug caught by asking "what does the LLM
+   see after each tool result?")
+3. Validation gaps on the NEW write paths (mine): update/replace accepted
+   negative/zero/huge quantities, any options ('pineapple'), kept the old
+   dish's options on replace, skipped the merge. Fixed in Order: _check_quantity
+   (1..99, int) on every path, options validated in tools on update too,
+   replace DISCARDS old options and merges identical lines. Lesson: when adding
+   a new write path, repeat the old path's gates - validation is per-path, not
+   per-class. (Lesson list #12.)
+4. execute() now catches KeyError/TypeError/Exception; _as_int coerces "2"->2;
+   json.loads on tool arguments guarded in chat loop. LLMs send string numbers.
+5. chat() is all-or-nothing: works on a message copy + order snapshot, commits
+   only on success -> a retried turn can't double-add or orphan tool calls.
+6. Pickup parser: '6.30 pm' (the literal Voxtral format from step 0!) now
+   parses; bare '7' REFUSED (AM/PM is a guess - rule 5, enforced in code at
+   last); '13 pm' rejected.
+7. Live eval scored by display name with a hand-map ('Samosa' vs 'Samosas'
+   bug). Fixed properly: order_items.menu_id selected through to the scorer.
+8. 'koththu' was an alias for chicken AND veg kottu -> dict kept veg. Fixed in
+   data: bare koththu = chicken (caller default); test forbids double aliases.
+
+REJECTED (with evidence): "no VAD/turn detector configured" - session logs show
+turn-detector-v1 + preemptive generation active via LiveKit Cloud; the reviewer
+read code, not runtime. Local plugins remain an EXPERIMENT to try (with
+before/after numbers), not a missing basic.
+
 ## 6. Track record of lessons that generalise
 
 1. Verify library APIs against the installed version, never from memory (mistralai import
